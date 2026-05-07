@@ -33,6 +33,9 @@ const LOCAL_CHARACTER_SAMPLES: Record<string, any> = {
   み: require('../assets/kana/hiragana-12415.json'),
   め: require('../assets/kana/hiragana-12417.json'),
   ほ: require('../assets/kana/hiragana-12411.json'),
+  は: require('../assets/kana/hiragana-12399.json'),
+  よ: require('../assets/kana/hiragana-12424.json'),
+  る: require('../assets/kana/hiragana-12427.json'),
 };
 
 export default function App() {

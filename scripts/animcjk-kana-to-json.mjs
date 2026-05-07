@@ -5,7 +5,23 @@ const Y_FLIP_ANCHOR = 900;
 const X_MIN = 0;
 const X_MAX = 1024;
 
-const KANA = ['あ', 'お', 'な', 'の', 'ぬ', 'ね', 'す', 'ま', 'む', 'み', 'め', 'ほ'];
+const KANA = [
+  'あ',
+  'お',
+  'な',
+  'の',
+  'ぬ',
+  'ね',
+  'す',
+  'ま',
+  'む',
+  'み',
+  'め',
+  'ほ',
+  'は',
+  'る',
+  'よ',
+];
 
 function charToAnimCjkKanaSvgUrl(char) {
   const codepoint = char.codePointAt(0);
