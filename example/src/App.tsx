@@ -18,8 +18,25 @@ import {
   defaultCharDataLoader,
 } from '@jamsch/react-native-hanzi-writer';
 
+/** Bundled animCJK-shaped sample for offline loop-stroke testing (no CDN). */
+const LOCAL_CHARACTER_SAMPLES: Record<string, any> = {
+  // Use ASCII-only filenames (codepoints) for Metro stability.
+  あ: require('../assets/kana/hiragana-12354.json'),
+  お: require('../assets/kana/hiragana-12362.json'),
+  な: require('../assets/kana/hiragana-12394.json'),
+  の: require('../assets/kana/hiragana-12398.json'),
+  ぬ: require('../assets/kana/hiragana-12396.json'),
+  ね: require('../assets/kana/hiragana-12397.json'),
+  す: require('../assets/kana/hiragana-12377.json'),
+  ま: require('../assets/kana/hiragana-12414.json'),
+  む: require('../assets/kana/hiragana-12416.json'),
+  み: require('../assets/kana/hiragana-12415.json'),
+  め: require('../assets/kana/hiragana-12417.json'),
+  ほ: require('../assets/kana/hiragana-12411.json'),
+};
+
 export default function App() {
-  const [character, setCharacter] = useState('验');
+  const [character, setCharacter] = useState('あ');
   const [showGridLines, setShowGridLines] = useState(true);
   const [showOutline, setShowOutline] = useState(true);
   const [showCharacter, setShowCharacter] = useState(true);
@@ -27,8 +44,11 @@ export default function App() {
 
   const writer = useHanziWriter({
     character,
-    // (Optional) This is where you would load the character data from your backend
     loader: (char) => {
+      const local = LOCAL_CHARACTER_SAMPLES[char.trim()];
+      if (local) {
+        return Promise.resolve(local);
+      }
       return defaultCharDataLoader(char);
     },
   });
@@ -146,6 +166,10 @@ export default function App() {
               </View>
             </View>
             <Text style={styles.heading}>LOAD CHARACTER</Text>
+            <Text style={styles.hint}>
+              Hiragana listed above uses bundled animCJK JSON. Other chars use
+              the CDN (Chinese hanzi-writer-data).
+            </Text>
             <TextInput
               value={character}
               onChangeText={setCharacter}
@@ -223,6 +247,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     margin: 2,
     marginTop: 8,
+  },
+  hint: {
+    fontSize: 11,
+    color: '#666',
+    marginHorizontal: 4,
+    marginBottom: 4,
   },
   rounded: { borderRadius: 8 },
   wrap: { flexWrap: 'wrap' },

@@ -6,7 +6,9 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "jsx": "react-jsx",
-    "lib": ["esnext"],
+    "lib": [
+      "esnext"
+    ],
     "module": "esnext",
     "moduleResolution": "node",
     "noFallthroughCasesInSwitch": true,
@@ -21,5 +23,9 @@
     "strict": true,
     "target": "esnext"
   },
-  "exclude": ["node_modules", "example"]
+  "exclude": [
+    "node_modules",
+    "example"
+  ],
+  "extends": "expo/tsconfig.base"
 }

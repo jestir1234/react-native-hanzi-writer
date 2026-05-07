@@ -31,6 +31,10 @@
     "prepack": "bob build",
     "release": "release-it",
     "example": "yarn --cwd example",
+    "example:install": "npm install --prefix example",
+    "example:start": "cd example && npm run start",
+    "example:ios": "cd example && npm run ios",
+    "example:android": "cd example && npm run android",
     "bootstrap": "yarn example && yarn install"
   },
   "keywords": [
