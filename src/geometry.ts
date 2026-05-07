@@ -157,20 +157,36 @@ const outlineCurve = (curve: Point[], numPoints = 30) => {
   return outlinePoints;
 };
 
+export type NormalizeCurveOptions = {
+  /** Use RMS distance from centroid for scale (stable for closed / loop-shaped strokes). Default: endpoint-based scale. */
+  useRmsScale?: boolean;
+};
+
 /** translate and scale from https://en.wikipedia.org/wiki/Procrustes_analysis */
-export const normalizeCurve = (curve: Point[]) => {
+export const normalizeCurve = (
+  curve: Point[],
+  options?: NormalizeCurveOptions
+) => {
+  const useRmsScale = options?.useRmsScale ?? false;
   const outlinedCurve = outlineCurve(curve);
   const meanX = average(outlinedCurve.map((point) => point.x));
   const meanY = average(outlinedCurve.map((point) => point.y));
   const mean = { x: meanX, y: meanY };
   const translatedCurve = outlinedCurve.map((point) => subtract(point, mean));
-  const scale = Math.sqrt(
-    average([
-      Math.pow(translatedCurve[0].x, 2) + Math.pow(translatedCurve[0].y, 2),
-      Math.pow(arrLast(translatedCurve).x, 2) +
-        Math.pow(arrLast(translatedCurve).y, 2),
-    ])
-  );
+  const scaleRaw = useRmsScale
+    ? Math.sqrt(
+        average(
+          translatedCurve.map((p) => Math.pow(p.x, 2) + Math.pow(p.y, 2))
+        )
+      )
+    : Math.sqrt(
+        average([
+          Math.pow(translatedCurve[0].x, 2) + Math.pow(translatedCurve[0].y, 2),
+          Math.pow(arrLast(translatedCurve).x, 2) +
+            Math.pow(arrLast(translatedCurve).y, 2),
+        ])
+      );
+  const scale = Math.max(scaleRaw, 1e-10);
   const scaledCurve = translatedCurve.map((point) => ({
     x: point.x / scale,
     y: point.y / scale,

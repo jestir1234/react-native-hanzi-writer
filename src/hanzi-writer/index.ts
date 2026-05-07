@@ -8,6 +8,7 @@ import {
   frechetDist,
   normalizeCurve,
   rotate,
+  subdivideCurve,
 } from '../geometry';
 
 function average(arr: number[]) {
@@ -78,11 +79,21 @@ export class UserStroke {
   }
 }
 
+/** Max segment length (character units) when densifying loop-shaped stroke medians for matching. */
+const LOOP_MATCHING_SUBDIVIDE_MAX_LEN = 30;
+
+/** Chord / arcLength below this marks a stroke as loop-shaped (sparse medians + closed-ish path). */
+const LOOP_SHAPE_CHORD_ARC_RATIO = 0.35;
+
 export class Stroke {
   path: string;
   points: Point[];
   strokeNum: number;
   isInRadical: boolean;
+  /** True when median path is much longer than start–end chord (e.g. hiragana loops). */
+  isLoopShaped: boolean;
+  /** Densified medians for distance/direction checks; only used when `isLoopShaped`. */
+  private densifiedMatchingPoints: Point[];
 
   constructor(
     path: string,
@@ -94,6 +105,25 @@ export class Stroke {
     this.points = points;
     this.strokeNum = strokeNum;
     this.isInRadical = isInRadical;
+
+    const arcLen =
+      points.length >= 2 ? length(points) : 0;
+    const chord =
+      points.length >= 2
+        ? distance(points[0], points[points.length - 1])
+        : 0;
+    this.isLoopShaped =
+      arcLen > 0 && chord / arcLen < LOOP_SHAPE_CHORD_ARC_RATIO;
+    this.densifiedMatchingPoints = this.isLoopShaped
+      ? subdivideCurve(points, LOOP_MATCHING_SUBDIVIDE_MAX_LEN)
+      : [];
+  }
+
+  /** Points used for min-distance and direction matching (densified for loops). */
+  getMatchingPoints(): Point[] {
+    return this.isLoopShaped && this.densifiedMatchingPoints.length > 0
+      ? this.densifiedMatchingPoints
+      : this.points;
   }
 
   getStartingPoint() {
@@ -109,8 +139,9 @@ export class Stroke {
   }
 
   getVectors() {
-    let lastPoint = this.points[0];
-    const pointsSansFirst = this.points.slice(1);
+    const pts = this.getMatchingPoints();
+    let lastPoint = pts[0];
+    const pointsSansFirst = pts.slice(1);
     return pointsSansFirst.map((point) => {
       const vector = subtract(point, lastPoint);
       lastPoint = point;
@@ -119,9 +150,8 @@ export class Stroke {
   }
 
   getDistance(point: Point) {
-    const distances = this.points.map((strokePoint) =>
-      distance(strokePoint, point)
-    );
+    const pts = this.getMatchingPoints();
+    const distances = pts.map((strokePoint) => distance(strokePoint, point));
     return Math.min(...distances);
   }
 
@@ -238,17 +268,16 @@ export function strokeMatches(
 const startAndEndMatches = (
   points: Point[],
   closestStroke: Stroke,
-  leniency: number
+  leniency: number,
+  loopMult: number
 ) => {
   const startingDist = distance(closestStroke.getStartingPoint(), points[0]);
   const endingDist = distance(
     closestStroke.getEndingPoint(),
     points[points.length - 1]
   );
-  return (
-    startingDist <= START_AND_END_DIST_THRESHOLD * leniency &&
-    endingDist <= START_AND_END_DIST_THRESHOLD * leniency
-  );
+  const thresh = START_AND_END_DIST_THRESHOLD * leniency * loopMult;
+  return startingDist <= thresh && endingDist <= thresh;
 };
 
 // returns a list of the direction of all segments in the line connecting the points
@@ -306,11 +335,30 @@ const SHAPE_FIT_ROTATIONS = [
   (-1 * Math.PI) / 16,
 ];
 
-const shapeFit = (curve1: Point[], curve2: Point[], leniency: number) => {
-  const normCurve1 = normalizeCurve(curve1);
-  const normCurve2 = normalizeCurve(curve2);
+const LOOP_SHAPE_FIT_ROTATIONS = [
+  Math.PI / 8,
+  Math.PI / 16,
+  Math.PI / 32,
+  0,
+  (-1 * Math.PI) / 32,
+  (-1 * Math.PI) / 16,
+  (-1 * Math.PI) / 8,
+];
+
+const shapeFit = (
+  curve1: Point[],
+  curve2: Point[],
+  leniency: number,
+  referenceStrokeIsLoop = false
+) => {
+  const normOpts = referenceStrokeIsLoop ? { useRmsScale: true } : undefined;
+  const normCurve1 = normalizeCurve(curve1, normOpts);
+  const normCurve2 = normalizeCurve(curve2, normOpts);
   let minDist = Infinity;
-  SHAPE_FIT_ROTATIONS.forEach((theta) => {
+  const rotations = referenceStrokeIsLoop
+    ? LOOP_SHAPE_FIT_ROTATIONS
+    : SHAPE_FIT_ROTATIONS;
+  rotations.forEach((theta) => {
     const dist = frechetDist(normCurve1, rotate(normCurve2, theta));
     if (dist < minDist) {
       minDist = dist;
@@ -333,16 +381,28 @@ const getMatchData = (
     isOutlineVisible = false,
     checkBackwards = true,
   } = options;
+  const loopMult = stroke.isLoopShaped ? 1.5 : 1;
   const avgDist = stroke.getAverageDistance(points);
   const distMod = isOutlineVisible || stroke.strokeNum > 0 ? 0.5 : 1;
-  const withinDistThresh = avgDist <= AVG_DIST_THRESHOLD * distMod * leniency;
+  const withinDistThresh =
+    avgDist <= AVG_DIST_THRESHOLD * distMod * leniency * loopMult;
   // short circuit for faster matching
   if (!withinDistThresh) {
     return { isMatch: false, avgDist, meta: { isStrokeBackwards: false } };
   }
-  const startAndEndMatch = startAndEndMatches(points, stroke, leniency);
+  const startAndEndMatch = startAndEndMatches(
+    points,
+    stroke,
+    leniency,
+    loopMult
+  );
   const directionMatch = directionMatches(points, stroke);
-  const shapeMatch = shapeFit(points, stroke.points, leniency);
+  const shapeMatch = shapeFit(
+    points,
+    stroke.points,
+    leniency * loopMult,
+    stroke.isLoopShaped
+  );
   const lengthMatch = lengthMatches(points, stroke, leniency);
   const isMatch =
     withinDistThresh &&
