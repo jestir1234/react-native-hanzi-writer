@@ -1,6 +1,7 @@
 import { forwardRef, useImperativeHandle, useMemo, useRef } from 'react';
 import {
   Easing,
+  ReduceMotion,
   type SharedValue,
   useAnimatedProps,
   useSharedValue,
@@ -42,7 +43,9 @@ export const StrokeAnimator = forwardRef<
         withTiming(0, {
           duration: 0,
           easing: Easing.ease,
-        })
+          reduceMotion: ReduceMotion.Never,
+        }),
+        ReduceMotion.Never,
       );
     },
     animate: (params: {
@@ -52,10 +55,14 @@ export const StrokeAnimator = forwardRef<
     }) => {
       const { duration, delay, onComplete } = params;
       const onCompleteCallback = () => onComplete?.();
-      const strokeIn = withTiming(1, { duration, easing: Easing.linear }, () =>
-        scheduleOnRN(onCompleteCallback)
+      const strokeIn = withTiming(
+        1,
+        { duration, easing: Easing.linear, reduceMotion: ReduceMotion.Never },
+        () => scheduleOnRN(onCompleteCallback)
       );
-      progress.value = delay ? withDelay(delay, strokeIn) : strokeIn;
+      progress.value = delay
+        ? withDelay(delay, strokeIn, ReduceMotion.Never)
+        : strokeIn;
     },
   }));
 

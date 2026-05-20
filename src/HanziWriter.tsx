@@ -31,6 +31,7 @@ import { getPathString as getPathStringWorklet } from './geometry-worklet';
 import { StrokeAnimator } from './components/StrokeAnimator';
 import Animated, {
   Easing,
+  ReduceMotion,
   useAnimatedProps,
   useSharedValue,
   withTiming,
@@ -225,7 +226,7 @@ export function UserStrokeGesture(props: PathProps) {
     const simplifiedPoints = simplify(points.value, 1);
     writer.quiz.check(simplifiedPoints);
     // Fade out the user's stroke
-    fade.value = withTiming(0, { duration: 200 }, () => {
+    fade.value = withTiming(0, { duration: 200, reduceMotion: ReduceMotion.Never }, () => {
       // reset the values
       points.value = [];
       fade.value = 1;
@@ -384,7 +385,11 @@ function PathFadeIn(props: PathProps) {
   const opacity = useSharedValue(0);
 
   useEffect(() => {
-    opacity.value = withTiming(1, { duration: 300, easing: Easing.linear });
+    opacity.value = withTiming(1, {
+      duration: 300,
+      easing: Easing.linear,
+      reduceMotion: ReduceMotion.Never,
+    });
   }, [opacity]);
 
   const animatedProps = useAnimatedProps(() => {
