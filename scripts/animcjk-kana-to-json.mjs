@@ -21,7 +21,38 @@ const KANA = [
   'は',
   'る',
   'よ',
+  'ょ',
+  // Dakuten
+  'が',
+  'ぎ',
+  'ぐ',
+  'げ',
+  'ご',
+  'ざ',
+  'じ',
+  'ず',
+  'ぜ',
+  'ぞ',
+  'だ',
+  'ぢ',
+  'づ',
+  'で',
+  'ど',
+  'ば',
+  'び',
+  'ぶ',
+  'べ',
+  'ぼ',
+  // Handakuten
+  'ぱ',
+  'ぴ',
+  'ぷ',
+  'ぺ',
+  'ぽ',
 ];
+
+/** When true (default), don't overwrite existing JSON files (preserves manual fixes). */
+const SKIP_EXISTING = !process.argv.includes('--force');
 
 function charToAnimCjkKanaSvgUrl(char) {
   const codepoint = char.codePointAt(0);
@@ -35,15 +66,71 @@ function pickMedianVariant(variants) {
 }
 
 function parseMedianPathD(d) {
-  // Example: "M 174,258 251,308 440,306 697,241"
-  const nums = d.match(/-?\d+(?:\.\d+)?/g)?.map(Number) ?? [];
+  // animCJK medians are polylines using M / L (implicit after M) / H / V.
+  // Tokenize letters and numbers separately so we can honor each command.
+  const tokens = d.match(/[a-zA-Z]|-?\d+(?:\.\d+)?/g) ?? [];
   const points = [];
-  for (let i = 0; i + 1 < nums.length; i += 2) {
-    const x = nums[i];
-    const y = nums[i + 1];
-    points.push([x, Y_FLIP_ANCHOR - y]);
+  let cmd = null;
+  let cx = 0;
+  let cy = 0;
+  let i = 0;
+
+  const readNum = () => Number(tokens[i++]);
+
+  while (i < tokens.length) {
+    const t = tokens[i];
+    if (/^[a-zA-Z]$/.test(t)) {
+      cmd = t;
+      i++;
+      continue;
+    }
+    switch (cmd) {
+      case 'M':
+      case 'L': {
+        cx = readNum();
+        cy = readNum();
+        points.push([cx, cy]);
+        // After an explicit M, subsequent implicit pairs are treated as L.
+        if (cmd === 'M') cmd = 'L';
+        break;
+      }
+      case 'm':
+      case 'l': {
+        cx += readNum();
+        cy += readNum();
+        points.push([cx, cy]);
+        if (cmd === 'm') cmd = 'l';
+        break;
+      }
+      case 'H': {
+        cx = readNum();
+        points.push([cx, cy]);
+        break;
+      }
+      case 'h': {
+        cx += readNum();
+        points.push([cx, cy]);
+        break;
+      }
+      case 'V': {
+        cy = readNum();
+        points.push([cx, cy]);
+        break;
+      }
+      case 'v': {
+        cy += readNum();
+        points.push([cx, cy]);
+        break;
+      }
+      default: {
+        // Unknown / unsupported command — skip the orphan number.
+        i++;
+        break;
+      }
+    }
   }
-  return points;
+
+  return points.map(([x, y]) => [x, Y_FLIP_ANCHOR - y]);
 }
 
 function formatStrokePathD(d) {
@@ -170,24 +257,53 @@ function parseAnimCjkKanaSvg(svgText) {
   return { strokes, medians };
 }
 
+async function fileExists(p) {
+  try {
+    await fs.access(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function main() {
   const outDir = path.resolve(process.cwd(), 'example/assets/kana');
   await fs.mkdir(outDir, { recursive: true });
 
+  const failures = [];
   for (const char of KANA) {
     const codepoint = char.codePointAt(0);
+    // Use ASCII-only filenames to avoid Metro resolution issues on some setups.
+    const outPath = path.join(outDir, `hiragana-${codepoint}.json`);
+
+    if (SKIP_EXISTING && (await fileExists(outPath))) {
+      // eslint-disable-next-line no-console
+      console.log(`skip (exists) ${outPath}`);
+      continue;
+    }
+
     const url = charToAnimCjkKanaSvgUrl(char);
     const res = await fetch(url);
     if (!res.ok) {
-      throw new Error(`Failed fetching ${char} (${url}): ${res.status}`);
+      // eslint-disable-next-line no-console
+      console.warn(`skip (HTTP ${res.status}) ${char} (${url})`);
+      failures.push({ char, codepoint, status: res.status });
+      continue;
     }
     const svgText = await res.text();
     const json = parseAnimCjkKanaSvg(svgText);
-    // Use ASCII-only filenames to avoid Metro resolution issues on some setups.
-    const outPath = path.join(outDir, `hiragana-${codepoint}.json`);
     await fs.writeFile(outPath, JSON.stringify(json, null, 2) + '\n', 'utf8');
     // eslint-disable-next-line no-console
     console.log(`wrote ${outPath}`);
+  }
+
+  if (failures.length > 0) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `\nMissing in animCJK: ${failures
+        .map((f) => `${f.char}(${f.codepoint})`)
+        .join(', ')}`
+    );
   }
 }
 
